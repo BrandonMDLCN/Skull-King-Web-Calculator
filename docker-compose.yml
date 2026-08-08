@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: skullking
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d skullking"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: 
+      context: ./backend
+    environment:
+      - PORT=4000
+      - DB_USER=postgres
+      - DB_HOST=db
+      - DB_NAME=skullking
+      - DB_PASSWORD=postgrespassword
+      - DB_PORT=5432
+    ports:
+      - "4000:4000"
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Se ha comentado el frontend para correrlo de forma nativa en tu máquina 
+  # y evitar lentitud extrema y problemas de logs trabados.
+  # frontend:
+  #   build:
+  #     context: ./skull-king-module
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_BACKEND_URL=http://localhost:4000
+  #     - BROWSER=none
+
+volumes:
+  pgdata:
