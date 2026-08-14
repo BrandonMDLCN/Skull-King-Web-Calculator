@@ -7,7 +7,8 @@ import Home from './views/Home';
 import LiderBoard from './views/LiderBoard';
 import JugadorBoard from './views/JugadorBoard';
 
-const socket = io('http://localhost:4000'); // URL de nuestro Backend
+const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+const socket = io(backendUrl); // URL de nuestro Backend
 
 function App() {
   return (
