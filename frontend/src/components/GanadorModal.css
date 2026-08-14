@@ -1,0 +1,127 @@
+
+/* Ganador Modal */
+/* Ganador Modal con Estética Pirata */
+.modal-overlay {
+  position: fixed;
+  inset: 0; /* Cubre top, left, right, bottom: 0 */
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85); 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  /* Un valor extremadamente alto para ganar a cualquier sticky */
+  z-index: 10000; 
+  -webkit-backdrop-filter: blur(8px); /* Aumentamos el desenfoque para que resalte el modal */
+  backdrop-filter: blur(8px);
+}
+
+.winner-card {
+  background-color: var(--paper);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.05) 100%);
+  border: 6px double var(--wood-dark);
+  outline: 2px solid var(--gold);
+  padding: 2rem; /* Reducido de 4rem para móviles */
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+  position: relative;
+  width: 90%; /* Ocupa casi todo el ancho en móviles */
+  max-width: 600px; /* Pero no crece demasiado en PC */
+  max-height: 90vh; /* Evita que se salga de la pantalla verticalmente */
+  overflow-y: auto; /* Scroll interno si el contenido es mucho */
+  animation: popIn 0.5s cubic-bezier(0.26, 0.53, 0.74, 1.48);
+  z-index: 10000;
+}
+
+.winner-title {
+  color: var(--pirate-red);
+  font-size: 1.8rem; /* Tamaño base más pequeño */
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  display: inline-block;
+  padding-bottom: 10px;
+}
+
+.winner-names {
+  margin: 25px 0;
+}
+
+.winner-name-highlight {
+  font-size: 2.5rem; /* Reducido de 5.5rem */
+  color: var(--wood-dark);
+  font-weight: 900;
+  word-wrap: break-word; /* Evita que nombres largos rompan el modal */
+}
+
+/* Media Query para pantallas más grandes (Desktop) */
+@media (min-width: 768px) {
+  .winner-card {
+    padding: 4rem;
+  }
+  .winner-title {
+    font-size: 3rem;
+  }
+  .winner-name-highlight {
+    font-size: 5.5rem;
+  }
+}
+
+.winner-score {
+  font-size: 1.8rem;
+  color: var(--ink);
+  font-weight: bold;
+  margin-bottom: 2rem;
+  display: block;
+}
+
+/* Reutilizamos el estilo de tu botón pirata para el botón de aceptar */
+.winner-card .btn-small {
+  background: var(--wood-dark);
+  color: var(--gold);
+  border: 2px solid var(--gold);
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+}
+
+.winner-card .btn-small:hover {
+  background: var(--pirate-red);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px var(--pirate-red);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.8) translateY(20px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.modal-buttons {
+  display: flex;
+  flex-direction: column; /* Botones uno sobre otro en móvil */
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+@media (min-width: 480px) {
+  .modal-buttons {
+    flex-direction: row; /* Botones al lado en pantallas medianas */
+  }
+}
+
+.icon-pirate {
+  margin: 0 15px;
+  font-size: 2.5rem;
+  vertical-align: middle;
+}
+
+.btn-pirate.gold:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}

@@ -1,0 +1,15 @@
+# Archivos compilados y directorios de build
+/build/
+*.exe
+
+# Dependencias de Node.js
+node_modules/
+
+# Archivos de configuración local y variables de entorno
+.env
+.vscode/
+
+# Archivos de logs
+logs/
+*.log
+!important.log # Excepción para un log crítico

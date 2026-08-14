@@ -1,0 +1,322 @@
+:root {
+  --wood-dark: #2c1e1a;
+  --gold: #d4af37;
+  --paper: #e8d5b5;
+  --ink: #2b2b2b;
+  --pirate-red: #a01a1a;
+}
+
+body {
+  margin: 0;
+  background-color: var(--wood-dark);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--ink);
+}
+
+.skull-king-theme {
+  padding: 20px; 
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.main-header {
+  text-align: center;
+  color: var(--gold);
+  border-bottom: 2px solid var(--gold);
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100; /* Bajado de 1000 a 100 */
+  background-color: var(--wood-dark);
+  padding: 10px 0;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.header-buttons {
+  margin: 15px 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column; /* Por defecto una columna (Mobile First) */
+  gap: 20px;
+  align-items: stretch;
+}
+
+/* Media Query para Tablets y PCs */
+@media (min-width: 992px) {
+  .game-container {
+    flex-direction: row; /* Volvemos a dos columnas en pantallas grandes */
+    align-items: flex-start;
+  }
+  
+  .side-panel {
+    flex: 1;
+    position: sticky; /* Opcional: El panel lateral se queda fijo al hacer scroll */
+    top: 20px;
+  }
+
+  .main-panel {
+    flex: 3;
+  }
+}
+
+/* --- OPTIMIZACIÓN DE TABLAS --- */
+/* Evita que la tabla desborde la pantalla en celulares */
+.main-panel {
+  width: 100%;
+  overflow-x: auto; /* Scroll horizontal si la tabla es muy ancha */
+}
+
+/* Tarjetas estilo papel antiguo */
+.card {
+  background-color: var(--paper);
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+  border: 1px solid #c4a484;
+  scroll-margin-top: 110px;
+}
+
+/* Botones Piratas */
+.btn-pirate {
+  background: var(--pirate-red);
+  color: white;
+  border: 2px solid var(--gold);
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.btn-pirate.gold {
+  background: var(--gold);
+  color: black;
+}
+
+.btn-pirate:hover { transform: scale(1.05); }
+
+/* Tabla */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 500px; /* Obligamos a la tabla a mantener un ancho mínimo para que sea legible */
+}
+
+.table-card {
+  width: 100%;
+  padding: 10px; /* Reducimos un poco el padding en móviles */
+  box-sizing: border-box; /* Asegura que el padding no sume al ancho total */
+}
+
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto; /* Aquí ocurre la magia: scroll horizontal solo cuando es necesario */
+  -webkit-overflow-scrolling: touch; /* Suavidad en dispositivos iOS */
+  margin-top: 10px;
+}
+
+@media (max-width: 600px) {
+  /* 1. Reducción general de fuentes y espacios */
+  .winner-title { font-size: 1.5rem; }
+  .main-header h1 { font-size: 1.2rem; margin: 5px 0; }
+  
+  th, td {
+    padding: 4px 2px; /* Espacio mínimo entre celdas */
+    font-size: 0.8rem; /* Fuente más pequeña */
+  }
+
+  .score-cell {
+    font-size: 1rem; /* Puntos totales un poco más contenidos */
+  }
+
+  /* 2. Reducción de Inputs para ahorrar espacio */
+  .input-pirate, .input-number {
+    width: 150px; /* Más estrecho */
+    height: 30px;
+    font-size: 0.8rem;
+    padding: 2px;
+  }
+
+  .btn-control {
+    width: 25px; /* Botones + y - más pequeños */
+    height: 25px;
+    font-size: 0.7rem;
+  }
+
+  .control-container {
+    gap: 2px; /* Menos espacio entre botones e input */
+  }
+
+  /* 3. COLUMNA FIJA (Primera columna) */
+  /* Aplicamos a la primera celda de cada fila (th y td) */
+  table th:first-child, 
+  table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2; /* Por encima de las otras celdas al scrollear */
+    background-color: var(--paper); /* Evita que se vea transparente */
+    min-width: 80px; /* Asegura espacio para el nombre */
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Sombra para indicar separación */
+  }
+
+  /* El encabezado de la primera columna necesita un z-index mayor */
+  table th:first-child {
+    z-index: 3;
+    background-color: #ddc9a6; /* Un tono ligeramente distinto para el header */
+  }
+}
+
+/* Ajuste de inputs para que sean fáciles de tocar con el dedo */
+.input-number, .btn-control {
+  min-height: 35px;
+  min-width: 35px;
+}
+
+th {
+  border-bottom: 2px solid var(--wood-dark);
+  padding: 10px;
+  text-align: center;
+}
+
+td { padding: 8px; text-align: center; }
+
+.score-cell {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: var(--pirate-red);
+}
+
+/* Inputs */
+.input-pirate, .input-number {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--wood-dark);
+  padding: 5px;
+  border-radius: 3px;
+}
+
+.input-number { width: 50px; text-align: center; }
+
+/* Colores de piratas en las notas */
+.p-red { color: #ff4d4d; }
+.p-yellow { color: #ffd700; }
+.p-green { color: #44bd32; }
+.p-blue { color: #0097e6; }
+
+.ronda-badge {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 1.2rem;
+  padding: 10px;
+  background: var(--wood-dark);
+  color: var(--gold);
+  border-radius: 5px;
+}
+
+.disabled { opacity: 0.5; cursor: not-allowed; }
+
+.multiplicador-aviso {
+  margin-top: 15px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: var(--gold);
+  text-align: center;
+  border: 1px dashed var(--gold);
+}
+
+.multiplicador-aviso.animar {
+  background: var(--pirate-red);
+  color: white;
+  border: 1px solid white;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.btn-pirate.blue {
+  background: #2980b9;
+  border-color: #3498db;
+}
+
+.edit-points {
+  border: 1px dashed var(--gold) !important;
+  background: rgba(212, 175, 55, 0.1) !important;
+  font-weight: bold;
+  color: var(--gold) !important;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.input-number:focus {
+  background: white !important;
+  color: black !important;
+  outline: 2px solid var(--gold);
+}
+
+.btn-control {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-control:hover {
+  background-color: #e0e0e0;
+}
+
+/* Quita las flechas por defecto del input para un look más limpio */
+.input-number::-webkit-inner-spin-button,
+.input-number::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.control-container { display: flex; align-items: center; gap: 5px; }
+
+.historial-footer {
+  flex: 1; /* 25% */
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.historial-entry {
+  border-left: 4px solid #f1c40f; /* Un color dorado pirata */
+  margin-bottom: 15px;
+  padding-left: 10px;
+  animation: fadeIn 0.5s ease-in;
+}
+
+.puntos-positivos { color: #2ecc71; font-weight: bold; }
+.puntos-negativos { color: #e74c3c; font-weight: bold; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
