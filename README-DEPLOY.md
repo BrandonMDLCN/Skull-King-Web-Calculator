@@ -90,3 +90,22 @@ Verás que la base de datos se levanta primero y una vez esté lista (healthy), 
 Entra a la carpeta del frontend: cd skull-king-module
 Instala las dependencias (si no lo has hecho en tu PC): npm install
 Inicia la app: npm start
+
+
+
+---
+# Terminal 1 (Para el Frontend):
+
+Entra a la carpeta del frontend: cd skull-king-module
+Instala las dependencias (si no lo has hecho en tu PC): npm install
+Inicia la app: npm start
+
+# Terminal 2 (Para el Backend):
+
+Entra a la carpeta del backend: cd backend
+Instala las dependencias (si no lo has hecho en tu PC): npm install
+Inicia la app: npm start
+
+# Terminal 3 (para la BD)
+ podman start skull-king-web_db_1
+ podman stop skull-king-web_db_1
