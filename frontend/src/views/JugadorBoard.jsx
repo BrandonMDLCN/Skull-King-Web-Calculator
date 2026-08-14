@@ -6,7 +6,7 @@ const JugadorBoard = ({ socket }) => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const [salaId, setSalaId] = useState(location.state?.salaId || '');
+  const [salaId] = useState(location.state?.salaId || '');
   const [jugador, setJugador] = useState(location.state?.jugador || null);
   
   const [jugadoresEnSala, setJugadoresEnSala] = useState([]);
@@ -57,7 +57,11 @@ const JugadorBoard = ({ socket }) => {
       if(yo) setJugador(yo);
       
       // Actualizar el historial automáticamente al avanzar de ronda
-      cargarHistorialCompleto();
+      socket.emit('obtener_historial', { salaId }, (res) => {
+          if (res.success) {
+              setHistorialCompleto(res.historial);
+          }
+      });
     });
 
     socket.on('juego_finalizado', (data) => {
@@ -79,19 +83,15 @@ const JugadorBoard = ({ socket }) => {
     };
   }, [socket, salaId, jugador, navigate]);
 
-  const cargarHistorialCompleto = () => {
-    socket.emit('obtener_historial', { salaId }, (res) => {
-        if (res.success) {
-            setHistorialCompleto(res.historial);
-        }
-    });
-  };
-
   useEffect(() => {
       if (salaId && estadoJuego !== 'ESPERANDO') {
-          cargarHistorialCompleto();
+          socket.emit('obtener_historial', { salaId }, (res) => {
+              if (res.success) {
+                  setHistorialCompleto(res.historial);
+              }
+          });
       }
-  }, [salaId, estadoJuego]);
+  }, [salaId, estadoJuego, socket]);
 
   const enviarApuesta = () => {
     socket.emit('enviar_apuesta', {

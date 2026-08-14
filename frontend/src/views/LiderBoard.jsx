@@ -6,9 +6,9 @@ const LiderBoard = ({ socket }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [salaId, setSalaId] = useState(location.state?.salaId || '');
-  const [jugador, setJugador] = useState(location.state?.jugador || null);
-  const [maxRondas, setMaxRondas] = useState(5); // Lo dejaremos estático al principio o lo traeremos de DB
+  const [salaId] = useState(location.state?.salaId || '');
+  const [jugador] = useState(location.state?.jugador || null);
+  const [maxRondas] = useState(5); // Lo dejaremos estático al principio o lo traeremos de DB
   
   const [jugadoresEnSala, setJugadoresEnSala] = useState([]);
   const [estadoJuego, setEstadoJuego] = useState('ESPERANDO');

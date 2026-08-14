@@ -1,6 +1,5 @@
 import './App.css';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import io from 'socket.io-client';
 
 // Componentes (Se crearán a continuación)
