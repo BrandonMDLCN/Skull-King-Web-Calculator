@@ -241,12 +241,30 @@ io.on('connection', (socket) => {
       const { salaId, rondaNumero, jugadorId, apuestaHecha, apuestaGanada, puntosExtra, efectoPirata, puntosCalculados } = data;
       
       const resHistorial = await query(
-        'SELECT puntos_obtenidos FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = $2 AND jugador_id = $3',
+        'SELECT puntos_obtenidos, estado_apuesta FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = $2 AND jugador_id = $3',
         [salaId, rondaNumero, jugadorId]
       );
       
       if (resHistorial.rows.length === 0) return callback({ success: false, error: 'Historial no encontrado' });
       
+      const estado = resHistorial.rows[0].estado_apuesta;
+
+      if (estado !== 'CALIFICADO') {
+         // Es una ronda activa, solo modificamos la apuesta
+         await query(
+           `UPDATE historial_rondas SET apuesta_hecha = $1 WHERE partida_id = $2 AND ronda_numero = $3 AND jugador_id = $4`,
+           [apuestaHecha, salaId, rondaNumero, jugadorId]
+         );
+         
+         const resNuevoHistorial = await query('SELECT * FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = $2', [salaId, rondaNumero]);
+         io.to(salaId).emit('estado_ronda_actualizado', resNuevoHistorial.rows);
+
+         const resTodoHistorial = await query('SELECT * FROM historial_rondas WHERE partida_id = $1 ORDER BY ronda_numero DESC', [salaId]);
+         io.to(salaId).emit('historial_completo_actualizado', resTodoHistorial.rows);
+
+         return callback({ success: true });
+      }
+
       const puntosViejos = resHistorial.rows[0].puntos_obtenidos;
       const diferencia = puntosCalculados - puntosViejos;
 

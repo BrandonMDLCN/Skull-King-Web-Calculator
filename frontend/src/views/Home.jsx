@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import RulesModal from '../components/RulesModal';
 
 const Home = ({ socket }) => {
   const navigate = useNavigate();
   const [nombre, setNombre] = useState('');
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [salaIdUnirse, setSalaIdUnirse] = useState('');
   const [maxRondas, setMaxRondas] = useState(5);
 
@@ -36,7 +38,17 @@ const Home = ({ socket }) => {
 
   return (
     <div className="card table-card" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-      <h2>Bienvenido a la Taberna</h2>
+      <div style={{ textAlign: 'right', marginBottom: '10px' }}>
+        <button 
+          className="btn-pirate blue" 
+          style={{ padding: '5px 15px', fontSize: '14px' }}
+          onClick={() => setIsRulesModalOpen(true)}
+        >
+          📖 ¿Cómo jugar?
+        </button>
+      </div>
+
+      <h2 style={{ marginTop: '0' }}>Bienvenido a la Taberna</h2>
       <br/>
       <div>
         <input 
@@ -79,6 +91,8 @@ const Home = ({ socket }) => {
           <button className="btn-pirate" onClick={handleUnirsePartida}>Unirse a Tripulación</button>
         </div>
       </div>
+
+      <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
     </div>
   );
 };

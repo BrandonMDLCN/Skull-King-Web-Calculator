@@ -85,6 +85,43 @@ body {
 }
 
 /* Botones Piratas */
+/* ==================== ESTILOS PARA LAS PESTAÑAS (TABS) ==================== */
+.tabs-container {
+    display: flex;
+    justify-content: center;
+    border-bottom: 2px solid var(--gold);
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    background-color: var(--wood);
+    color: #fff;
+    border: 2px solid var(--gold);
+    border-bottom: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 10px 10px 0 0;
+    margin: 0 5px;
+    transition: all 0.2s ease-in-out;
+    opacity: 0.7;
+}
+
+.tab-button:hover {
+    background-color: #5a3d24;
+    opacity: 1;
+}
+
+.tab-active {
+    background-color: var(--paper);
+    color: var(--ink);
+    opacity: 1;
+    border-bottom: 3px solid var(--paper); /* Para "fusionarse" con el contenedor */
+    margin-bottom: -2px; /* Superpone el borde del contenedor padre */
+}
+
 .btn-pirate {
   background: var(--pirate-red);
   color: white;

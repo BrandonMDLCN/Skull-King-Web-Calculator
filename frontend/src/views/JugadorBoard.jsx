@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
-import InfoNote from '../components/info-note';
+import RulesModal from '../components/RulesModal';
 
 const JugadorBoard = ({ socket }) => {
   const location = useLocation();
@@ -20,6 +20,7 @@ const JugadorBoard = ({ socket }) => {
   const [historialCompleto, setHistorialCompleto] = useState([]);
   const [maxRondas, setMaxRondas] = useState(5);
   const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
   useEffect(() => {
     if (!salaId || !jugador) {
@@ -127,8 +128,10 @@ const JugadorBoard = ({ socket }) => {
   }
 
   if (estadoJuego === 'FINALIZADA') {
-      // Ordenar por puntos
-      const ganadores = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
+      const clasificacion = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
+      const maxPuntos = clasificacion[0]?.puntos;
+      const empatados = clasificacion.filter(j => j.puntos === maxPuntos);
+
       return (
           <div className="card table-card" style={{textAlign:'center'}}>
               {modalGanadorAbierto && (
@@ -140,8 +143,16 @@ const JugadorBoard = ({ socket }) => {
                       <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
                       <div className="card table-card" style={{ width: '90%', maxWidth: '500px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
                           <h2>¡Juego Finalizado!</h2>
-                          <h3>🏆 El ganador es <strong>{ganadores[0]?.nombre}</strong> con {ganadores[0]?.puntos * 10} puntos 🏆</h3>
-                          <button className="btn-pirate gold" onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
+                          {empatados.length > 1 ? (
+                              <>
+                                  <h3>⚔️ ¡Tenemos un empate! ⚔️</h3>
+                                  <h4>Los ganadores son:</h4>
+                                  {empatados.map(emp => <h3 key={emp.id}>🏆 <strong>{emp.nombre}</strong> con {emp.puntos * 10} puntos</h3>)}
+                              </>
+                          ) : (
+                              <h3>🏆 El ganador es <strong>{clasificacion[0]?.nombre}</strong> con {clasificacion[0]?.puntos * 10} puntos 🏆</h3>
+                          )}
+                          <button className="btn-pirate gold" style={{marginTop:'20px'}} onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
                       </div>
                   </div>
               )}
@@ -157,10 +168,10 @@ const JugadorBoard = ({ socket }) => {
                           </tr>
                       </thead>
                       <tbody>
-                          {ganadores.map((j, index) => (
+                          {clasificacion.map((j, index) => (
                               <tr key={j.id}>
                                   <td>{index + 1}</td>
-                                  <td>{j.nombre} {index === 0 ? '👑' : ''}</td>
+                                  <td>{j.nombre} {empatados.find(e => e.id === j.id) ? '👑' : ''}</td>
                                   <td><strong>{j.puntos * 10}</strong></td>
                               </tr>
                           ))}
@@ -172,12 +183,17 @@ const JugadorBoard = ({ socket }) => {
       )
   }
 
+  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.every(j => {
+      const estado = estadoRonda.find(er => er.jugador_id === j.id);
+      return estado && estado.estado_apuesta !== 'PENDIENTE';
+  });
+
   return (
     <div className="card table-card">
       <div className="table-header">
         <h2>Ronda {rondaActual}</h2>
         <div>
-          <button className="btn-pirate blue" onClick={() => document.getElementById('modal-tutorial-jugador').style.display = 'flex'} style={{marginRight: '10px'}}>Efecto Pirata</button>
+          <button className="btn-pirate blue" onClick={() => setIsRulesModalOpen(true)} style={{marginRight: '10px'}}>📜 Reglas y Poderes</button>
         </div>
         <span className="ronda-badge">Mis Puntos: {jugador.puntos * 10}</span>
       </div>
@@ -223,8 +239,15 @@ const JugadorBoard = ({ socket }) => {
             {jugadoresEnSala.map(j => {
               const statusRonda = estadoRonda.find(er => er.jugador_id === j.id);
               let textoEstado = "Pensando...";
-              if(statusRonda && statusRonda.estado_apuesta === 'APOSTADO') textoEstado = "¡Apostó!";
-              if(statusRonda && statusRonda.estado_apuesta === 'CALIFICADO') textoEstado = "Calificado";
+              
+              if(statusRonda && statusRonda.estado_apuesta === 'APOSTADO') {
+                  textoEstado = todosApostaron ? `Apostó: ${statusRonda.apuesta_hecha}` : "¡Apostó!";
+              }
+              if(statusRonda && statusRonda.estado_apuesta === 'CALIFICADO') {
+                  textoEstado = `Calificado (Apostó: ${statusRonda.apuesta_hecha})`;
+              }
+              // if(statusRonda && statusRonda.estado_apuesta === 'APOSTADO') textoEstado = `Apostó: ${statusRonda.apuesta_hecha}`;
+              // if(statusRonda && statusRonda.estado_apuesta === 'CALIFICADO') textoEstado = `Calificado (Apostó: ${statusRonda.apuesta_hecha})`;
               
               return (
                 <tr key={j.id}>
@@ -283,19 +306,7 @@ const JugadorBoard = ({ socket }) => {
           </div>
       )}
 
-      {/* MODAL TUTORIAL PIRATAS */}
-      <div id="modal-tutorial-jugador" style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
-          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
-          display: 'none', justifyContent: 'center', alignItems: 'center'
-      }}>
-          <div className="card table-card" style={{ width: '90%', maxWidth: '600px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
-              <InfoNote></InfoNote>
-              <div style={{textAlign: 'center', marginTop: '20px'}}>
-                <button className="btn-pirate" onClick={() => document.getElementById('modal-tutorial-jugador').style.display = 'none'}>Cerrar</button>
-              </div>
-          </div>
-      </div>
+      <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
     </div>
   );
 };

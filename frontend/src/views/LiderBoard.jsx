@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
-import InfoNote from '../components/info-note';
+import RulesModal from '../components/RulesModal';
 
 const LiderBoard = ({ socket }) => {
   const location = useLocation();
@@ -24,6 +24,7 @@ const LiderBoard = ({ socket }) => {
   const [modalHistorialOpen, setModalHistorialOpen] = useState(false);
   const [editandoHistorial, setEditandoHistorial] = useState(null);
   const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
   useEffect(() => {
     if (!salaId || !jugador) {
@@ -272,7 +273,10 @@ const LiderBoard = ({ socket }) => {
   }
 
   if (estadoJuego === 'FINALIZADA') {
-    const ganadores = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
+    const clasificacion = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
+    const maxPuntos = clasificacion[0]?.puntos;
+    const empatados = clasificacion.filter(j => j.puntos === maxPuntos);
+
     return (
         <div className="card table-card" style={{textAlign:'center'}}>
             {modalGanadorAbierto && (
@@ -284,8 +288,16 @@ const LiderBoard = ({ socket }) => {
                     <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
                     <div className="card table-card" style={{ width: '90%', maxWidth: '500px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
                         <h2>¡Juego Finalizado!</h2>
-                        <h3>🏆 El ganador es <strong>{ganadores[0]?.nombre}</strong> con {ganadores[0]?.puntos * 10} puntos 🏆</h3>
-                        <button className="btn-pirate gold" onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
+                        {empatados.length > 1 ? (
+                            <>
+                                <h3>⚔️ ¡Tenemos un empate! ⚔️</h3>
+                                <h4>Los ganadores son:</h4>
+                                {empatados.map(emp => <h3 key={emp.id}>🏆 <strong>{emp.nombre}</strong> con {emp.puntos * 10} puntos</h3>)}
+                            </>
+                        ) : (
+                            <h3>🏆 El ganador es <strong>{clasificacion[0]?.nombre}</strong> con {clasificacion[0]?.puntos * 10} puntos 🏆</h3>
+                        )}
+                        <button className="btn-pirate gold" style={{marginTop:'20px'}} onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
                     </div>
                 </div>
             )}
@@ -301,10 +313,10 @@ const LiderBoard = ({ socket }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {ganadores.map((j, index) => (
+                        {clasificacion.map((j, index) => (
                             <tr key={j.id}>
                                 <td>{index + 1}</td>
-                                <td>{j.nombre} {index === 0 ? '👑' : ''}</td>
+                                <td>{j.nombre} {empatados.find(e => e.id === j.id) ? '👑' : ''}</td>
                                 <td><strong>{j.puntos * 10}</strong></td>
                             </tr>
                         ))}
@@ -316,12 +328,17 @@ const LiderBoard = ({ socket }) => {
     )
   }
 
+  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.every(j => {
+      const estado = estadoRonda.find(er => er.jugador_id === j.id);
+      return estado && estado.estado_apuesta !== 'PENDIENTE';
+  });
+
   return (
     <div className="card table-card" style={{ width: '100%' }}>
       <div className="table-header">
         <h2>Panel del Capitán - Ronda {rondaActual}</h2>
         <div>
-          <button className="btn-pirate blue" onClick={() => document.getElementById('modal-tutorial').style.display = 'flex'} style={{marginRight: '10px'}}>Efecto Pirata</button>
+          <button className="btn-pirate blue" onClick={() => setIsRulesModalOpen(true)} style={{marginRight: '10px'}}>📜 Reglas y Poderes</button>
           <button className="btn-pirate" onClick={cargarHistorialCompleto} style={{marginRight: '10px'}}>Historial</button>
           <button className="btn-pirate gold" onClick={calificarRonda}>Calificar y Avanzar</button>
         </div>
@@ -368,8 +385,10 @@ const LiderBoard = ({ socket }) => {
                     <td>{j.nombre}</td>
                     <td>{j.puntos * 10}</td>
                     
-                    <td>
-                        {renderControlesCaptura(j.id, 'apuestaHecha', cap.apuestaHecha, 0)}
+                    <td style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold' }}>
+                        {statusRonda?.estado_apuesta !== 'PENDIENTE' 
+                            ? (todosApostaron ? statusRonda?.apuesta_hecha : '❓') 
+                            : '-'}
                     </td>
                     
                     <td>
@@ -415,18 +434,22 @@ const LiderBoard = ({ socket }) => {
                                   <label>Apuesta:</label><br/>
                                   <input type="number" className="input-number" value={editandoHistorial.apuesta_hecha} onChange={e => setEditandoHistorial({...editandoHistorial, apuesta_hecha: e.target.value})} />
                               </div>
-                              <div>
-                                  <label>Ganadas:</label><br/>
-                                  <input type="number" className="input-number" value={editandoHistorial.apuesta_ganada} onChange={e => setEditandoHistorial({...editandoHistorial, apuesta_ganada: e.target.value})} />
-                              </div>
-                              <div>
-                                  <label>Extra:</label><br/>
-                                  <input type="number" className="input-number" value={editandoHistorial.puntos_extra} onChange={e => setEditandoHistorial({...editandoHistorial, puntos_extra: e.target.value})} />
-                              </div>
-                              <div>
-                                  <label>Efecto:</label><br/>
-                                  <input type="number" className="input-number" value={editandoHistorial.efecto_pirata} onChange={e => setEditandoHistorial({...editandoHistorial, efecto_pirata: e.target.value})} />
-                              </div>
+                              {editandoHistorial.estado_apuesta === 'CALIFICADO' && (
+                                <>
+                                  <div>
+                                      <label>Ganadas:</label><br/>
+                                      <input type="number" className="input-number" value={editandoHistorial.apuesta_ganada} onChange={e => setEditandoHistorial({...editandoHistorial, apuesta_ganada: e.target.value})} />
+                                  </div>
+                                  <div>
+                                      <label>Extra:</label><br/>
+                                      <input type="number" className="input-number" value={editandoHistorial.puntos_extra} onChange={e => setEditandoHistorial({...editandoHistorial, puntos_extra: e.target.value})} />
+                                  </div>
+                                  <div>
+                                      <label>Efecto:</label><br/>
+                                      <input type="number" className="input-number" value={editandoHistorial.efecto_pirata} onChange={e => setEditandoHistorial({...editandoHistorial, efecto_pirata: e.target.value})} />
+                                  </div>
+                                </>
+                              )}
                           </div>
                           <div style={{ marginTop: '20px' }}>
                               <button className="btn-pirate gold" onClick={guardarEdicionHistorial} style={{marginRight:'10px'}}>Guardar Cambios</button>
@@ -458,13 +481,13 @@ const LiderBoard = ({ socket }) => {
                                     <tr key={i} style={rowStyle}>
                                         <td>{h.ronda_numero}</td>
                                         <td>{jug ? `${jug.nombre} (${jug.puntos * 10} pts)` : h.jugador_id}</td>
-                                        <td>{h.apuesta_hecha}</td>
-                                        <td>{h.apuesta_ganada}</td>
-                                        <td>{h.puntos_extra}</td>
-                                        <td>{h.efecto_pirata}</td>
-                                        <td>{h.puntos_obtenidos * 10}</td>
+                                        <td>{h.estado_apuesta !== 'PENDIENTE' ? h.apuesta_hecha : '-'}</td>
+                                        <td>{h.estado_apuesta === 'CALIFICADO' ? h.apuesta_ganada : '-'}</td>
+                                        <td>{h.estado_apuesta === 'CALIFICADO' ? h.puntos_extra : '-'}</td>
+                                        <td>{h.estado_apuesta === 'CALIFICADO' ? h.efecto_pirata : '-'}</td>
+                                        <td>{h.estado_apuesta === 'CALIFICADO' ? h.puntos_obtenidos * 10 : '-'}</td>
                                         <td>
-                                            {h.estado_apuesta === 'CALIFICADO' && (
+                                            {h.estado_apuesta !== 'PENDIENTE' && (
                                                 <button className="btn-pirate" style={{padding: '5px'}} onClick={() => setEditandoHistorial(h)}>Editar</button>
                                             )}
                                         </td>
@@ -478,19 +501,7 @@ const LiderBoard = ({ socket }) => {
           </div>
       )}
 
-      {/* MODAL TUTORIAL PIRATAS */}
-      <div id="modal-tutorial" style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
-          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
-          display: 'none', justifyContent: 'center', alignItems: 'center'
-      }}>
-          <div className="card table-card" style={{ width: '90%', maxWidth: '600px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
-              <InfoNote></InfoNote>
-              <div style={{textAlign: 'center', marginTop: '20px'}}>
-                <button className="btn-pirate" onClick={() => document.getElementById('modal-tutorial').style.display = 'none'}>Cerrar</button>
-              </div>
-          </div>
-      </div>
+      <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
     </div>
   );
 };
