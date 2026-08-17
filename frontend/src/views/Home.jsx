@@ -27,7 +27,7 @@ const Home = ({ socket }) => {
     socket.emit('unirse_partida', { salaId: salaIdUnirse, nombreJugador: nombre }, (response) => {
       if (response.success) {
         localStorage.setItem('jugadorId', response.jugador.id);
-        navigate(`/sala/${response.salaId}/jugador`, { state: { salaId: response.salaId, jugador: response.jugador, partida: response.partida }});
+        navigate(`/sala/${response.salaId}/jugador`, { state: { salaId: response.salaId, jugador: response.jugador, partida: response.partida, jugadoresEnSala: response.jugadoresEnSala }});
       } else {
         alert(response.error);
       }

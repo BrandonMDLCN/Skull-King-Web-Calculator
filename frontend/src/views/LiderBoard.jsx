@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
+import InfoNote from '../components/info-note';
 
 const LiderBoard = ({ socket }) => {
   const location = useLocation();
@@ -8,7 +9,7 @@ const LiderBoard = ({ socket }) => {
 
   const [salaId] = useState(location.state?.salaId || '');
   const [jugador] = useState(location.state?.jugador || null);
-  const [maxRondas] = useState(5); // Lo dejaremos estático al principio o lo traeremos de DB
+  const [maxRondas, setMaxRondas] = useState(5); // Lo dejaremos estático al principio o lo traeremos de DB
   
   const [jugadoresEnSala, setJugadoresEnSala] = useState([]);
   const [estadoJuego, setEstadoJuego] = useState('ESPERANDO');
@@ -22,6 +23,7 @@ const LiderBoard = ({ socket }) => {
   const [historialCompleto, setHistorialCompleto] = useState([]);
   const [modalHistorialOpen, setModalHistorialOpen] = useState(false);
   const [editandoHistorial, setEditandoHistorial] = useState(null);
+  const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
 
   useEffect(() => {
     if (!salaId || !jugador) {
@@ -36,6 +38,7 @@ const LiderBoard = ({ socket }) => {
     socket.on('juego_iniciado', (data) => {
       setEstadoJuego('JUGANDO');
       setRondaActual(data.rondaActual);
+      if (data.maxRondas) setMaxRondas(data.maxRondas);
       inicializarCaptura(jugadoresEnSala);
     });
 
@@ -63,6 +66,7 @@ const LiderBoard = ({ socket }) => {
 
     socket.on('ronda_avanzada', (data) => {
       setRondaActual(data.rondaActual);
+      if (data.maxRondas) setMaxRondas(data.maxRondas);
       setJugadoresEnSala(data.jugadores);
       setEstadoRonda(data.estadoRonda);
       inicializarCaptura(data.jugadores);
@@ -200,6 +204,7 @@ const LiderBoard = ({ socket }) => {
 
         return {
             jugadorId: j.id,
+            apuestaHecha: cap.apuestaHecha,
             apuestaGanada: cap.apuestaGanada,
             puntosExtra: cap.puntosExtra,
             efectoPirata: cap.efectoPirata,
@@ -250,7 +255,7 @@ const LiderBoard = ({ socket }) => {
     return (
       <div className="card table-card">
         <h2>Sala de Espera - Eres el Capitán</h2>
-        <p>Código para unirse: <strong style={{fontSize:'24px', color: '#ffd700'}}>{salaId}</strong></p>
+        <p>Código para unirse: <strong style={{fontSize:'24px', color: 'var(--pirate-red)'}}>{salaId}</strong></p>
         
         <h3>Tripulación en Sala:</h3>
         <ul>
@@ -270,9 +275,42 @@ const LiderBoard = ({ socket }) => {
     const ganadores = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
     return (
         <div className="card table-card" style={{textAlign:'center'}}>
-            <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
-            <h2>¡Juego Finalizado!</h2>
-            <h3>El ganador es {ganadores[0]?.nombre} con {ganadores[0]?.puntos * 10} puntos</h3>
+            {modalGanadorAbierto && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+                    backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
+                    display: 'flex', justifyContent: 'center', alignItems: 'center'
+                }}>
+                    <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
+                    <div className="card table-card" style={{ width: '90%', maxWidth: '500px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
+                        <h2>¡Juego Finalizado!</h2>
+                        <h3>🏆 El ganador es <strong>{ganadores[0]?.nombre}</strong> con {ganadores[0]?.puntos * 10} puntos 🏆</h3>
+                        <button className="btn-pirate gold" onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
+                    </div>
+                </div>
+            )}
+            
+            <h2>Tabla Final de Puntuaciones</h2>
+            <div className="table-responsive-container">
+                <table style={{ margin: '0 auto', maxWidth: '600px', marginBottom: '20px' }}>
+                    <thead>
+                        <tr>
+                            <th>Posición</th>
+                            <th>Pirata</th>
+                            <th>Puntos Totales</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {ganadores.map((j, index) => (
+                            <tr key={j.id}>
+                                <td>{index + 1}</td>
+                                <td>{j.nombre} {index === 0 ? '👑' : ''}</td>
+                                <td><strong>{j.puntos * 10}</strong></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
             <button className="btn-pirate" onClick={() => navigate('/')}>Volver a la Taberna</button>
         </div>
     )
@@ -283,10 +321,14 @@ const LiderBoard = ({ socket }) => {
       <div className="table-header">
         <h2>Panel del Capitán - Ronda {rondaActual}</h2>
         <div>
-          <button className="btn-pirate" onClick={cargarHistorialCompleto} style={{marginRight: '10px'}}>Historial Rondas</button>
+          <button className="btn-pirate blue" onClick={() => document.getElementById('modal-tutorial').style.display = 'flex'} style={{marginRight: '10px'}}>Efecto Pirata</button>
+          <button className="btn-pirate" onClick={cargarHistorialCompleto} style={{marginRight: '10px'}}>Historial</button>
           <button className="btn-pirate gold" onClick={calificarRonda}>Calificar y Avanzar</button>
         </div>
       </div>
+      
+      {rondaActual === maxRondas - 1 && <div className="multiplicador-aviso animar">¡Atención! En esta ronda los puntos valen x2</div>}
+      {rondaActual === maxRondas && <div className="multiplicador-aviso animar">¡Atención! En esta última ronda los puntos valen x3</div>}
 
       {!yoYaAposte && (
           <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '10px', marginBottom: '20px' }}>
@@ -308,7 +350,7 @@ const LiderBoard = ({ socket }) => {
           <thead>
             <tr>
               <th>Pirata</th>
-              <th>Ptos. (x10)</th>
+              <th>Puntos Totales</th>
               <th>Apuesta</th>
               <th>Ganadas</th>
               <th>Extra</th>
@@ -326,8 +368,8 @@ const LiderBoard = ({ socket }) => {
                     <td>{j.nombre}</td>
                     <td>{j.puntos * 10}</td>
                     
-                    <td style={{textAlign:'center'}}>
-                        <strong>{cap.apuestaHecha}</strong>
+                    <td>
+                        {renderControlesCaptura(j.id, 'apuestaHecha', cap.apuestaHecha, 0)}
                     </td>
                     
                     <td>
@@ -435,6 +477,20 @@ const LiderBoard = ({ socket }) => {
               </div>
           </div>
       )}
+
+      {/* MODAL TUTORIAL PIRATAS */}
+      <div id="modal-tutorial" style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
+          display: 'none', justifyContent: 'center', alignItems: 'center'
+      }}>
+          <div className="card table-card" style={{ width: '90%', maxWidth: '600px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
+              <InfoNote></InfoNote>
+              <div style={{textAlign: 'center', marginTop: '20px'}}>
+                <button className="btn-pirate" onClick={() => document.getElementById('modal-tutorial').style.display = 'none'}>Cerrar</button>
+              </div>
+          </div>
+      </div>
     </div>
   );
 };

@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
       // Obtener todos los jugadores actuales
       const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
       
-      callback({ success: true, salaId: salaCode, jugador, partida });
+      callback({ success: true, salaId: salaCode, jugador, partida, jugadoresEnSala: resJugadores.rows });
       
       // Notificar a todos en la sala del nuevo jugador
       io.to(salaCode).emit('jugadores_actualizados', resJugadores.rows);
@@ -111,6 +111,9 @@ io.on('connection', (socket) => {
       const { salaId } = data;
       await query("UPDATE partidas SET estado = 'JUGANDO', ronda_actual = 1 WHERE id = $1", [salaId]);
       
+      const resPartida = await query('SELECT max_rondas FROM partidas WHERE id = $1', [salaId]);
+      const maxRondas = resPartida.rows.length > 0 ? resPartida.rows[0].max_rondas : 5;
+
       // Inicializar el historial (apuestas) para la primera ronda para todos los jugadores
       const resJugadores = await query('SELECT id FROM jugadores WHERE partida_id = $1', [salaId]);
       
@@ -121,7 +124,7 @@ io.on('connection', (socket) => {
           );
       }
 
-      io.to(salaId).emit('juego_iniciado', { rondaActual: 1 });
+      io.to(salaId).emit('juego_iniciado', { rondaActual: 1, maxRondas });
       
       // Emitir el estado de la ronda para que todos vean quién falta de apostar
       const resHistorial = await query('SELECT * FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = 1', [salaId]);
@@ -156,7 +159,7 @@ io.on('connection', (socket) => {
 
   // 5. LIDER CALIFICA RESULTADOS Y AVANZA RONDA
   socket.on('calificar_ronda', async (data, callback) => {
-      // data.resultados es un array de objetos con: jugadorId, apuestaGanada, puntosExtra, efectoPirata, y los puntos calculados
+      // data.resultados es un array de objetos con: jugadorId, apuestaHecha, apuestaGanada, puntosExtra, efectoPirata, y los puntos calculados
     try {
       const { salaId, rondaNumero, resultados, maxRondas } = data;
 
@@ -164,9 +167,9 @@ io.on('connection', (socket) => {
       for(const res of resultados) {
           await query(
               `UPDATE historial_rondas 
-               SET apuesta_ganada = $1, puntos_extra = $2, efecto_pirata = $3, puntos_obtenidos = $4, estado_apuesta = 'CALIFICADO'
-               WHERE partida_id = $5 AND ronda_numero = $6 AND jugador_id = $7`,
-              [res.apuestaGanada, res.puntosExtra, res.efectoPirata, res.puntosCalculados, salaId, rondaNumero, res.jugadorId]
+               SET apuesta_hecha = $1, apuesta_ganada = $2, puntos_extra = $3, efecto_pirata = $4, puntos_obtenidos = $5, estado_apuesta = 'CALIFICADO'
+               WHERE partida_id = $6 AND ronda_numero = $7 AND jugador_id = $8`,
+              [res.apuestaHecha, res.apuestaGanada, res.puntosExtra, res.efectoPirata, res.puntosCalculados, salaId, rondaNumero, res.jugadorId]
           );
 
           // 5.2 Sumar puntos al jugador
@@ -206,6 +209,7 @@ io.on('connection', (socket) => {
           
           io.to(salaId).emit('ronda_avanzada', { 
               rondaActual: proximaRonda,
+              maxRondas: maxRondas,
               jugadores: resJugadores.rows,
               estadoRonda: resNuevoHistorial.rows
           });

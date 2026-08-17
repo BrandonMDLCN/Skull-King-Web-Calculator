@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
+import InfoNote from '../components/info-note';
 
 const JugadorBoard = ({ socket }) => {
   const location = useLocation();
@@ -9,7 +10,7 @@ const JugadorBoard = ({ socket }) => {
   const [salaId] = useState(location.state?.salaId || '');
   const [jugador, setJugador] = useState(location.state?.jugador || null);
   
-  const [jugadoresEnSala, setJugadoresEnSala] = useState([]);
+  const [jugadoresEnSala, setJugadoresEnSala] = useState(location.state?.jugadoresEnSala || []);
   const [estadoJuego, setEstadoJuego] = useState('ESPERANDO'); // ESPERANDO, JUGANDO, FINALIZADA
   const [rondaActual, setRondaActual] = useState(0);
   
@@ -17,6 +18,8 @@ const JugadorBoard = ({ socket }) => {
   const [yaAposto, setYaAposto] = useState(false);
   const [estadoRonda, setEstadoRonda] = useState([]); // Quien ya apostó
   const [historialCompleto, setHistorialCompleto] = useState([]);
+  const [maxRondas, setMaxRondas] = useState(5);
+  const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
 
   useEffect(() => {
     if (!salaId || !jugador) {
@@ -34,6 +37,7 @@ const JugadorBoard = ({ socket }) => {
     socket.on('juego_iniciado', (data) => {
       setEstadoJuego('JUGANDO');
       setRondaActual(data.rondaActual);
+      if (data.maxRondas) setMaxRondas(data.maxRondas);
       setYaAposto(false);
       setApuestaHecha(0);
     });
@@ -49,6 +53,7 @@ const JugadorBoard = ({ socket }) => {
 
     socket.on('ronda_avanzada', (data) => {
       setRondaActual(data.rondaActual);
+      if (data.maxRondas) setMaxRondas(data.maxRondas);
       setJugadoresEnSala(data.jugadores);
       setEstadoRonda(data.estadoRonda);
       setYaAposto(false);
@@ -110,7 +115,7 @@ const JugadorBoard = ({ socket }) => {
     return (
       <div className="card table-card">
         <h2>Esperando al Capitán para iniciar...</h2>
-        <p>Sala: <strong>{salaId}</strong></p>
+        <p>Sala: <strong style={{color: 'var(--pirate-red)'}}>{salaId}</strong></p>
         <h3>Tripulación Actual:</h3>
         <ul>
           {jugadoresEnSala.map(j => (
@@ -126,9 +131,42 @@ const JugadorBoard = ({ socket }) => {
       const ganadores = [...jugadoresEnSala].sort((a,b) => b.puntos - a.puntos);
       return (
           <div className="card table-card" style={{textAlign:'center'}}>
-              <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
-              <h2>¡Juego Finalizado!</h2>
-              <h3>El ganador es {ganadores[0]?.nombre} con {ganadores[0]?.puntos * 10} puntos</h3>
+              {modalGanadorAbierto && (
+                  <div style={{
+                      position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+                      backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
+                      display: 'flex', justifyContent: 'center', alignItems: 'center'
+                  }}>
+                      <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />
+                      <div className="card table-card" style={{ width: '90%', maxWidth: '500px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
+                          <h2>¡Juego Finalizado!</h2>
+                          <h3>🏆 El ganador es <strong>{ganadores[0]?.nombre}</strong> con {ganadores[0]?.puntos * 10} puntos 🏆</h3>
+                          <button className="btn-pirate gold" onClick={() => setModalGanadorAbierto(false)}>Ver Resultados</button>
+                      </div>
+                  </div>
+              )}
+              
+              <h2>Tabla Final de Puntuaciones</h2>
+              <div className="table-responsive-container">
+                  <table style={{ margin: '0 auto', maxWidth: '600px', marginBottom: '20px' }}>
+                      <thead>
+                          <tr>
+                              <th>Posición</th>
+                              <th>Pirata</th>
+                              <th>Puntos Totales</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {ganadores.map((j, index) => (
+                              <tr key={j.id}>
+                                  <td>{index + 1}</td>
+                                  <td>{j.nombre} {index === 0 ? '👑' : ''}</td>
+                                  <td><strong>{j.puntos * 10}</strong></td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
               <button className="btn-pirate" onClick={() => navigate('/')}>Volver a la Taberna</button>
           </div>
       )
@@ -138,8 +176,14 @@ const JugadorBoard = ({ socket }) => {
     <div className="card table-card">
       <div className="table-header">
         <h2>Ronda {rondaActual}</h2>
+        <div>
+          <button className="btn-pirate blue" onClick={() => document.getElementById('modal-tutorial-jugador').style.display = 'flex'} style={{marginRight: '10px'}}>Efecto Pirata</button>
+        </div>
         <span className="ronda-badge">Mis Puntos: {jugador.puntos * 10}</span>
       </div>
+      
+      {rondaActual === maxRondas - 1 && <div className="multiplicador-aviso animar">¡Atención! En esta ronda los puntos valen x2</div>}
+      {rondaActual === maxRondas && <div className="multiplicador-aviso animar">¡Atención! En esta última ronda los puntos valen x3</div>}
 
       <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
         {!yaAposto ? (
@@ -166,33 +210,35 @@ const JugadorBoard = ({ socket }) => {
       </div>
 
       <h3 style={{ marginTop: '30px' }}>Estado de la Tripulación</h3>
-      <table style={{ width: '100%', marginTop: '10px' }}>
-        <thead>
-          <tr>
-            <th>Pirata</th>
-            <th>Puntos (x10)</th>
-            <th>Estado Ronda</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jugadoresEnSala.map(j => {
-            const statusRonda = estadoRonda.find(er => er.jugador_id === j.id);
-            let textoEstado = "Pensando...";
-            if(statusRonda && statusRonda.estado_apuesta === 'APOSTADO') textoEstado = "¡Apostó!";
-            if(statusRonda && statusRonda.estado_apuesta === 'CALIFICADO') textoEstado = "Calificado";
-            
-            return (
-              <tr key={j.id}>
-                <td>{j.nombre}</td>
-                <td style={{textAlign:'center'}}>{j.puntos * 10}</td>
-                <td style={{textAlign:'center', color: statusRonda?.estado_apuesta === 'APOSTADO' ? '#4CAF50' : '#FFC107'}}>
-                    {textoEstado}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="table-responsive-container">
+        <table style={{ width: '100%', marginTop: '10px' }}>
+          <thead>
+            <tr>
+              <th>Pirata</th>
+              <th>Puntos Totales</th>
+              <th>Estado Ronda</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jugadoresEnSala.map(j => {
+              const statusRonda = estadoRonda.find(er => er.jugador_id === j.id);
+              let textoEstado = "Pensando...";
+              if(statusRonda && statusRonda.estado_apuesta === 'APOSTADO') textoEstado = "¡Apostó!";
+              if(statusRonda && statusRonda.estado_apuesta === 'CALIFICADO') textoEstado = "Calificado";
+              
+              return (
+                <tr key={j.id}>
+                  <td>{j.nombre}</td>
+                  <td style={{textAlign:'center'}}>{j.puntos * 10}</td>
+                  <td style={{textAlign:'center', color: statusRonda?.estado_apuesta === 'APOSTADO' ? '#4CAF50' : '#FFC107'}}>
+                      {textoEstado}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {historialCompleto.length > 0 && (
           <div style={{ marginTop: '40px' }}>
@@ -207,7 +253,7 @@ const JugadorBoard = ({ socket }) => {
                             <th>Ganadas</th>
                             <th>Extra</th>
                             <th>Efecto</th>
-                            <th>Puntos (x10)</th>
+                            <th>Puntos Totales</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -236,6 +282,20 @@ const JugadorBoard = ({ socket }) => {
               </div>
           </div>
       )}
+
+      {/* MODAL TUTORIAL PIRATAS */}
+      <div id="modal-tutorial-jugador" style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, 
+          display: 'none', justifyContent: 'center', alignItems: 'center'
+      }}>
+          <div className="card table-card" style={{ width: '90%', maxWidth: '600px', backgroundColor: 'var(--paper)', color: 'var(--ink)' }}>
+              <InfoNote></InfoNote>
+              <div style={{textAlign: 'center', marginTop: '20px'}}>
+                <button className="btn-pirate" onClick={() => document.getElementById('modal-tutorial-jugador').style.display = 'none'}>Cerrar</button>
+              </div>
+          </div>
+      </div>
     </div>
   );
 };
