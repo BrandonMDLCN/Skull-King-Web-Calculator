@@ -94,6 +94,63 @@ const LiderBoard = ({ socket }) => {
     };
   }, [socket, salaId, jugador, navigate, jugadoresEnSala]);
 
+  // Manejo de reconexión y sincronización inicial
+  useEffect(() => {
+    const handleReconnect = () => {
+      if (salaId && jugador?.id) {
+        socket.emit('reunirse_sala', { salaId, jugadorId: jugador.id }, (res) => {
+          if (res && res.success) {
+            setJugadoresEnSala(res.jugadores);
+            setEstadoJuego(res.partida.estado);
+            if (res.partida.estado === 'JUGANDO') {
+              setRondaActual(res.partida.ronda_actual);
+              setMaxRondas(res.partida.max_rondas);
+              setEstadoRonda(res.estadoRonda);
+
+              setCapturaResultados(prev => {
+                const nuevaCaptura = { ...prev };
+                res.jugadores.forEach(j => {
+                    if (!nuevaCaptura[j.id]) {
+                        nuevaCaptura[j.id] = {
+                            apuestaHecha: 0,
+                            apuestaGanada: 0,
+                            puntosExtra: 0,
+                            efectoPirata: 0
+                        };
+                    }
+                });
+                res.estadoRonda.forEach(hr => {
+                    if (nuevaCaptura[hr.jugador_id] && hr.estado_apuesta !== 'PENDIENTE') {
+                        nuevaCaptura[hr.jugador_id].apuestaHecha = hr.apuesta_hecha;
+                    }
+                });
+                return nuevaCaptura;
+              });
+              
+              const miEstado = res.estadoRonda.find(hr => hr.jugador_id === jugador.id);
+              if (miEstado && miEstado.estado_apuesta !== 'PENDIENTE') {
+                setYoYaAposte(true);
+                setMiApuestaHecha(miEstado.apuesta_hecha);
+              } else {
+                setYoYaAposte(false);
+              }
+            }
+          }
+        });
+      }
+    };
+
+    socket.on('connect', handleReconnect);
+
+    if (socket.connected) {
+      handleReconnect();
+    }
+
+    return () => {
+      socket.off('connect', handleReconnect);
+    };
+  }, [socket, salaId, jugador?.id]);
+
   const cargarHistorialCompleto = () => {
     socket.emit('obtener_historial', { salaId }, (res) => {
         if (res.success) {

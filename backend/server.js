@@ -293,6 +293,45 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 8. RECONEXIÓN (Unirse a la sala y recuperar estado)
+  socket.on('reunirse_sala', async (data, callback) => {
+    try {
+      const { salaId, jugadorId } = data;
+      if (!salaId) return;
+      const salaCode = salaId.toUpperCase();
+      
+      socket.join(salaCode);
+
+      // Obtener datos actuales de la partida
+      const resPartida = await query('SELECT * FROM partidas WHERE id = $1', [salaCode]);
+      if (resPartida.rows.length === 0) {
+        if (callback) return callback({ success: false, error: 'La partida no existe' });
+        return;
+      }
+      
+      const partida = resPartida.rows[0];
+      const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
+      
+      // Obtener estado de la ronda actual
+      let estadoRonda = [];
+      if (partida.estado === 'JUGANDO') {
+          const resHistorial = await query('SELECT * FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = $2', [salaCode, partida.ronda_actual]);
+          estadoRonda = resHistorial.rows;
+      }
+      
+      if (callback) callback({
+        success: true,
+        partida,
+        jugadores: resJugadores.rows,
+        estadoRonda
+      });
+
+    } catch (error) {
+      console.error(error);
+      if (callback) callback({ success: false, error: error.message });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id);
   });

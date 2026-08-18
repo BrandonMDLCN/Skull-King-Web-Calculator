@@ -89,6 +89,50 @@ const JugadorBoard = ({ socket }) => {
     };
   }, [socket, salaId, jugador, navigate]);
 
+  // Manejo de reconexión y carga inicial del estado
+  useEffect(() => {
+    const handleReconnect = () => {
+      if (salaId && jugador?.id) {
+        socket.emit('reunirse_sala', { salaId, jugadorId: jugador.id }, (res) => {
+          if (res && res.success) {
+            setJugadoresEnSala(res.jugadores);
+            setEstadoJuego(res.partida.estado);
+            if (res.partida.estado === 'JUGANDO') {
+              setRondaActual(res.partida.ronda_actual);
+              setMaxRondas(res.partida.max_rondas);
+              setEstadoRonda(res.estadoRonda);
+              
+              const miApuesta = res.estadoRonda.find(h => h.jugador_id === jugador.id);
+              if (miApuesta && miApuesta.estado_apuesta !== 'PENDIENTE') {
+                setYaAposto(true);
+                setApuestaHecha(miApuesta.apuesta_hecha);
+              } else {
+                setYaAposto(false);
+              }
+              
+              const yo = res.jugadores.find(j => j.id === jugador.id);
+              if(yo) setJugador(yo);
+              
+              socket.emit('obtener_historial', { salaId }, (histRes) => {
+                if (histRes && histRes.success) setHistorialCompleto(histRes.historial);
+              });
+            }
+          }
+        });
+      }
+    };
+
+    socket.on('connect', handleReconnect);
+
+    if (socket.connected) {
+      handleReconnect();
+    }
+
+    return () => {
+      socket.off('connect', handleReconnect);
+    };
+  }, [socket, salaId, jugador?.id]);
+
   useEffect(() => {
       if (salaId && estadoJuego !== 'ESPERANDO') {
           socket.emit('obtener_historial', { salaId }, (res) => {
