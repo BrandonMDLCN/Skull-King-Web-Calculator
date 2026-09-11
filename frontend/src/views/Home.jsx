@@ -8,13 +8,47 @@ const Home = ({ socket }) => {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [salaIdUnirse, setSalaIdUnirse] = useState('');
   const [maxRondas, setMaxRondas] = useState(5);
+  const [sesionActiva, setSesionActiva] = useState(null);
+
+  React.useEffect(() => {
+    const salaId = sessionStorage.getItem('salaId');
+    const jugadorId = sessionStorage.getItem('jugadorId');
+    const isLider = sessionStorage.getItem('isLider') === 'true';
+    const nombreLocal = sessionStorage.getItem('nombre');
+
+    if (salaId && jugadorId) {
+      setSesionActiva({ salaId, jugadorId: Number(jugadorId), isLider, nombre: nombreLocal });
+    }
+  }, []);
+
+  const handleReconectar = () => {
+    if (sesionActiva) {
+      socket.emit('reunirse_sala', { salaId: sesionActiva.salaId, jugadorId: sesionActiva.jugadorId }, (res) => {
+        if (res.success) {
+          const route = sesionActiva.isLider ? `/sala/${sesionActiva.salaId}/lider` : `/sala/${sesionActiva.salaId}/jugador`;
+          const jugador = res.jugadores.find(j => j.id === sesionActiva.jugadorId);
+          navigate(route, { state: { salaId: sesionActiva.salaId, jugador, partida: res.partida, jugadoresEnSala: res.jugadores }});
+        } else {
+          alert('La partida ya no existe o ha caducado.');
+          sessionStorage.removeItem('salaId');
+          sessionStorage.removeItem('jugadorId');
+          sessionStorage.removeItem('isLider');
+          sessionStorage.removeItem('nombre');
+          setSesionActiva(null);
+        }
+      });
+    }
+  };
 
   const handleCrearPartida = () => {
     if (!nombre.trim()) return alert("Ingresa tu nombre primero.");
     socket.emit('crear_partida', { nombreLider: nombre, maxRondas }, (response) => {
       if (response.success) {
-        // Guardamos info básica en local storage (opcional, para persistir recargas)
-        localStorage.setItem('jugadorId', response.jugador.id);
+        // Guardamos info básica en session storage
+        sessionStorage.setItem('jugadorId', response.jugador.id);
+        sessionStorage.setItem('salaId', response.salaId);
+        sessionStorage.setItem('isLider', 'true');
+        sessionStorage.setItem('nombre', response.jugador.nombre);
         navigate(`/sala/${response.salaId}/lider`, { state: { salaId: response.salaId, jugador: response.jugador }});
       } else {
         alert(response.error);
@@ -28,7 +62,10 @@ const Home = ({ socket }) => {
     
     socket.emit('unirse_partida', { salaId: salaIdUnirse, nombreJugador: nombre }, (response) => {
       if (response.success) {
-        localStorage.setItem('jugadorId', response.jugador.id);
+        sessionStorage.setItem('jugadorId', response.jugador.id);
+        sessionStorage.setItem('salaId', response.salaId);
+        sessionStorage.setItem('isLider', 'false');
+        sessionStorage.setItem('nombre', response.jugador.nombre);
         navigate(`/sala/${response.salaId}/jugador`, { state: { salaId: response.salaId, jugador: response.jugador, partida: response.partida, jugadoresEnSala: response.jugadoresEnSala }});
       } else {
         alert(response.error);
@@ -37,6 +74,10 @@ const Home = ({ socket }) => {
   };
 
   return (
+    <div style={{ width: '100%' }}>
+    <header className="main-header">
+      <h1>SKULL KING ⚓ MULTIPLAYER</h1>
+    </header>
     <div className="card table-card" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
       <div style={{ textAlign: 'right', marginBottom: '10px' }}>
         <button 
@@ -92,7 +133,31 @@ const Home = ({ socket }) => {
         </div>
       </div>
 
+      {sesionActiva && (
+        <div style={{ marginTop: '30px', padding: '15px', backgroundColor: 'rgba(0, 0, 0, 0.2)', borderRadius: '10px' }}>
+          <h3>Tienes una partida en curso</h3>
+          <p>Pirata: <strong>{sesionActiva.nombre}</strong> | Sala: <strong>{sesionActiva.salaId}</strong></p>
+          <button className="btn-pirate blue" onClick={handleReconectar}>Volver a la Partida</button>
+          <br/>
+          <button 
+              className="btn-pirate red" 
+              style={{ marginTop: '10px' }} 
+              onClick={() => {
+                  socket.emit('abandonar_partida', { salaId: sesionActiva.salaId, jugadorId: sesionActiva.jugadorId }, () => {
+                      sessionStorage.removeItem('salaId');
+                      sessionStorage.removeItem('jugadorId');
+                      sessionStorage.removeItem('isLider');
+                      sessionStorage.removeItem('nombre');
+                      setSesionActiva(null);
+                  });
+              }}>
+              Abandonar
+          </button>
+        </div>
+      )}
+
       <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
+    </div>
     </div>
   );
 };

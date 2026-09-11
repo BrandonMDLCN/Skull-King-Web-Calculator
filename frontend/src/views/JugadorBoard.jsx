@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
 import RulesModal from '../components/RulesModal';
 
-const JugadorBoard = ({ socket }) => {
+const JugadorBoard = ({ socket, onAbandonar }) => {
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -22,6 +22,26 @@ const JugadorBoard = ({ socket }) => {
   const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
+  const handleAbandonar = () => {
+    if (salaId && jugador?.id) {
+        socket.emit('abandonar_partida', { salaId, jugadorId: jugador.id });
+    }
+    if (onAbandonar) onAbandonar();
+    sessionStorage.removeItem('salaId');
+    sessionStorage.removeItem('jugadorId');
+    sessionStorage.removeItem('isLider');
+    sessionStorage.removeItem('nombre');
+    navigate('/');
+  };
+
+    const handleVolverLobby = () => {
+        socket.emit('volver_al_lobby', { salaId, jugadorId: jugador.id }, () => {
+            // El servidor actualizará al jugador y notificará a la sala
+            setEstadoJuego('ESPERANDO');
+            setRondaActual(0);
+        });
+    };
+
   useEffect(() => {
     if (!salaId || !jugador) {
       navigate('/');
@@ -39,8 +59,14 @@ const JugadorBoard = ({ socket }) => {
       setEstadoJuego('JUGANDO');
       setRondaActual(data.rondaActual);
       if (data.maxRondas) setMaxRondas(data.maxRondas);
+      if (data.jugadores) {
+        setJugadoresEnSala(data.jugadores);
+        const yo = data.jugadores.find(j => j.id === jugador?.id);
+        if(yo) setJugador(yo);
+      }
       setYaAposto(false);
       setApuestaHecha(0);
+      setModalGanadorAbierto(true); // Resetear modal ganador para próximas partidas
     });
 
     socket.on('estado_ronda_actualizado', (historialRonda) => {
@@ -79,6 +105,48 @@ const JugadorBoard = ({ socket }) => {
       setHistorialCompleto(historial);
     });
 
+    socket.on('reunirse_sala_response', (data) => {
+      if (data.success) {
+        setEstadoJuego(data.partida.estado);
+        setJugadoresEnSala(data.jugadores);
+        setRondaActual(data.partida.ronda_actual);
+        setYaAposto(false);
+        setApuestaHecha(0);
+        setEstadoRonda(data.estadoRonda || []);
+        setHistorialCompleto([]);
+        setModalGanadorAbierto(true);
+        const yo = data.jugadores.find(j => j.id === jugador.id);
+        if(yo) setJugador(yo);
+      }
+    });
+    
+    socket.on('juego_reiniciado', (data) => {
+        setEstadoJuego('ESPERANDO');
+        setJugadoresEnSala(data.jugadores);
+        setRondaActual(0);
+        setYaAposto(false);
+        setApuestaHecha(0);
+        setEstadoRonda([]);
+        setHistorialCompleto([]);
+        setModalGanadorAbierto(true);
+        const yo = data.jugadores.find(j => j.id === jugador.id);
+        if(yo) setJugador(yo);
+    });
+
+    socket.on('jugador_expulsado', (data) => {
+        if (data && data.jugadorId === jugador?.id) {
+            alert("Has sido expulsado de la sala por el capitán.");
+            sessionStorage.clear();
+            navigate('/');
+        }
+    });
+
+    socket.on('partida_destruida', () => {
+        alert("El capitán ha abandonado la sala. La partida ha terminado.");
+        sessionStorage.clear();
+        navigate('/');
+    });
+
     return () => {
       socket.off('jugadores_actualizados');
       socket.off('juego_iniciado');
@@ -86,6 +154,10 @@ const JugadorBoard = ({ socket }) => {
       socket.off('ronda_avanzada');
       socket.off('juego_finalizado');
       socket.off('historial_completo_actualizado');
+      socket.off('reunirse_sala_response');
+      socket.off('juego_reiniciado');
+      socket.off('jugador_expulsado');
+      socket.off('partida_destruida');
     };
   }, [socket, salaId, jugador, navigate]);
 
@@ -159,12 +231,22 @@ const JugadorBoard = ({ socket }) => {
   if (estadoJuego === 'ESPERANDO') {
     return (
       <div className="card table-card">
-        <h2>Esperando al Capitán para iniciar...</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Esperando al Capitán para iniciar...</h2>
+            <button className="btn-pirate" onClick={() => {
+                if(window.confirm("¿Seguro que quieres abandonar la sala?")) {
+                    sessionStorage.clear();
+                    handleAbandonar();
+                }
+            }}>Abandonar Sala</button>
+        </div>
         <p>Sala: <strong style={{color: 'var(--pirate-red)'}}>{salaId}</strong></p>
         <h3>Tripulación Actual:</h3>
         <ul>
           {jugadoresEnSala.map(j => (
-            <li key={j.id}>{j.nombre} {j.is_lider ? '(Capitán)' : ''}</li>
+            <li key={j.id} style={{ color: j.activo ? 'inherit' : 'grey', textDecoration: j.activo ? 'none' : 'line-through' }}>
+              {j.nombre} {j.is_lider ? '(Capitán)' : ''} {!j.activo ? '(Inactivo)' : ''} {!j.en_lobby && j.activo ? '(En partida...)' : ''}
+            </li>
           ))}
         </ul>
       </div>
@@ -222,21 +304,32 @@ const JugadorBoard = ({ socket }) => {
                       </tbody>
                   </table>
               </div>
-              <button className="btn-pirate" onClick={() => navigate('/')}>Volver a la Taberna</button>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <p style={{ alignSelf: 'center', margin: 0, fontWeight: 'bold' }}>Esperando a que el capitán inicie una nueva partida o vuelve al lobby.</p>
+                <button className="btn-pirate" onClick={handleVolverLobby}>Volver al Lobby</button>
+              </div>
           </div>
       )
   }
 
-  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.every(j => {
+  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.filter(j => j.activo).every(j => {
       const estado = estadoRonda.find(er => er.jugador_id === j.id);
       return estado && estado.estado_apuesta !== 'PENDIENTE';
   });
 
   return (
     <div className="card table-card">
-      <div className="table-header">
-        <h2>Ronda {rondaActual}</h2>
-        <div>
+      <div className="table-header" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h2>Ronda {rondaActual} de {maxRondas}</h2>
+            <button className="btn-pirate" style={{ fontSize: '12px', padding: '5px 10px' }} onClick={() => {
+                if(window.confirm("¿Seguro que quieres salir de la partida?")) {
+                    sessionStorage.clear();
+                    handleAbandonar();
+                }
+            }}>Salir</button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button className="btn-pirate blue" onClick={() => setIsRulesModalOpen(true)} style={{marginRight: '10px'}}>📜 Reglas y Poderes</button>
         </div>
         <span className="ronda-badge">Mis Puntos: {jugador.puntos * 10}</span>
@@ -281,6 +374,8 @@ const JugadorBoard = ({ socket }) => {
           </thead>
           <tbody>
             {jugadoresEnSala.map(j => {
+              if (!j.activo) return null;
+
               const statusRonda = estadoRonda.find(er => er.jugador_id === j.id);
               let textoEstado = "Pensando...";
               

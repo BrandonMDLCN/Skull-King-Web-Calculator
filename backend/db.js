@@ -41,10 +41,29 @@ const initDB = async () => {
         nombre VARCHAR(50) NOT NULL,
         puntos INT DEFAULT 0,
         is_lider BOOLEAN DEFAULT FALSE,
+        activo BOOLEAN DEFAULT TRUE,
+        en_lobby BOOLEAN DEFAULT TRUE,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(partida_id, nombre)
       );
     `);
+    
+    // Migración por si la tabla ya existe
+    try {
+        await client.query(`SAVEPOINT before_alter_activo`);
+        await client.query(`ALTER TABLE jugadores ADD COLUMN activo BOOLEAN DEFAULT TRUE;`);
+        await client.query(`RELEASE SAVEPOINT before_alter_activo`);
+    } catch (e) { 
+        await client.query(`ROLLBACK TO SAVEPOINT before_alter_activo`);
+    }
+    
+    try {
+        await client.query(`SAVEPOINT before_alter_en_lobby`);
+        await client.query(`ALTER TABLE jugadores ADD COLUMN en_lobby BOOLEAN DEFAULT TRUE;`);
+        await client.query(`RELEASE SAVEPOINT before_alter_en_lobby`);
+    } catch (e) { 
+        await client.query(`ROLLBACK TO SAVEPOINT before_alter_en_lobby`);
+    }
 
     // Tabla de Historial de Rondas y Apuestas Actuales
     // Aquí guardaremos las métricas de la ronda actual y las pasadas.

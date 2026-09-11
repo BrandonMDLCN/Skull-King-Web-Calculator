@@ -74,6 +74,9 @@ io.on('connection', (socket) => {
         return callback({ success: false, error: 'La partida ya ha comenzado o finalizado.' });
       }
 
+      // Eliminar al jugador inactivo si existe con el mismo nombre para permitir reconexión o reuso del nombre
+      await query("DELETE FROM jugadores WHERE partida_id = $1 AND nombre = $2 AND activo = FALSE", [salaCode, nombreJugador]);
+
       // Insertar jugador
       let jugador;
       try {
@@ -109,6 +112,12 @@ io.on('connection', (socket) => {
   socket.on('iniciar_juego', async (data) => {
     try {
       const { salaId } = data;
+
+      // Limpiar historial previo por si es un reinicio forzado
+      await query("DELETE FROM historial_rondas WHERE partida_id = $1", [salaId]);
+      // Reiniciar puntos por si quedaron puntos de una partida anterior
+      await query("UPDATE jugadores SET puntos = 0 WHERE partida_id = $1", [salaId]);
+
       await query("UPDATE partidas SET estado = 'JUGANDO', ronda_actual = 1 WHERE id = $1", [salaId]);
       
       const resPartida = await query('SELECT max_rondas FROM partidas WHERE id = $1', [salaId]);
@@ -124,7 +133,14 @@ io.on('connection', (socket) => {
           );
       }
 
-      io.to(salaId).emit('juego_iniciado', { rondaActual: 1, maxRondas });
+      // Obtener la lista de jugadores actualizada con los puntos en 0
+      const resJugadoresActualizados = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaId]);
+
+      io.to(salaId).emit('juego_iniciado', { 
+        rondaActual: 1, 
+        maxRondas,
+        jugadores: resJugadoresActualizados.rows 
+      });
       
       // Emitir el estado de la ronda para que todos vean quién falta de apostar
       const resHistorial = await query('SELECT * FROM historial_rondas WHERE partida_id = $1 AND ronda_numero = 1', [salaId]);
@@ -190,8 +206,15 @@ io.on('connection', (socket) => {
           nuevoEstado = 'FINALIZADA';
           await query("UPDATE partidas SET estado = $1 WHERE id = $2", [nuevoEstado, salaId]);
           
+      // Al finalizar, eliminar a los inactivos y resetear en_lobby a false para los activos
+      await query("DELETE FROM jugadores WHERE partida_id = $1 AND activo = FALSE", [salaId]);
+      await query("UPDATE jugadores SET en_lobby = FALSE WHERE partida_id = $1 AND activo = TRUE", [salaId]);
+          
+          // Obtener lista final
+          const resJugadoresFinal = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaId]);
+
           io.to(salaId).emit('juego_finalizado', { 
-            jugadores: resJugadores.rows 
+            jugadores: resJugadoresFinal.rows 
           });
 
       } else {
@@ -330,6 +353,155 @@ io.on('connection', (socket) => {
       console.error(error);
       if (callback) callback({ success: false, error: error.message });
     }
+  });
+
+  // 9. REINICIAR PARTIDA EN LA MISMA SALA
+  socket.on('reiniciar_partida', async (data, callback) => {
+    try {
+      const { salaId } = data;
+      const salaCode = salaId.toUpperCase();
+
+      // Eliminar definitivamente a los jugadores que abandonaron (inactivos) antes de reiniciar
+      await query("DELETE FROM jugadores WHERE partida_id = $1 AND activo = FALSE", [salaCode]);
+
+      // Forzar que todos los jugadores activos estén en el lobby
+      await query("UPDATE jugadores SET en_lobby = TRUE WHERE partida_id = $1 AND activo = TRUE", [salaCode]);
+
+      // Resetear estado de la partida a ESPERANDO y ronda a 0
+      await query("UPDATE partidas SET estado = 'ESPERANDO', ronda_actual = 0 WHERE id = $1", [salaCode]);
+
+      // Resetear puntos de los jugadores a 0
+      await query("UPDATE jugadores SET puntos = 0, en_lobby = TRUE WHERE partida_id = $1", [salaCode]);
+
+      // Eliminar el historial de la sala
+      await query("DELETE FROM historial_rondas WHERE partida_id = $1", [salaCode]);
+
+      // Obtener la lista actualizada de jugadores con puntos en 0
+      const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 AND activo = TRUE ORDER BY id ASC', [salaCode]);
+
+      // Emitir a todos que el juego volvió a la sala de espera
+      io.to(salaCode).emit('reunirse_sala_response', {
+          success: true,
+          partida: { estado: 'ESPERANDO', ronda_actual: 0 },
+          jugadores: resJugadores.rows,
+          estadoRonda: []
+      });
+
+      // Reforzar que vuelvan a ESPERANDO enviando actualización de jugadores y estado
+      io.to(salaCode).emit('juego_reiniciado', { jugadores: resJugadores.rows });
+      
+      if (callback) callback({ success: true });
+    } catch (error) {
+      console.error(error);
+      if (callback) callback({ success: false, error: error.message });
+    }
+  });
+
+  // 10. FINALIZAR PARTIDA ANTICIPADAMENTE
+  socket.on('finalizar_partida_anticipadamente', async (data) => {
+    try {
+      const { salaId } = data;
+      const salaCode = salaId.toUpperCase();
+
+      await query("UPDATE partidas SET estado = 'FINALIZADA' WHERE id = $1", [salaCode]);
+
+      // Al finalizar, eliminar inactivos y resetear en_lobby a false para todos los jugadores activos
+      await query("DELETE FROM jugadores WHERE partida_id = $1 AND activo = FALSE", [salaCode]);
+      await query("UPDATE jugadores SET en_lobby = FALSE WHERE partida_id = $1 AND activo = TRUE", [salaCode]);
+
+      const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
+
+      io.to(salaCode).emit('juego_finalizado', { 
+        jugadores: resJugadores.rows 
+      });
+
+    } catch (error) {
+      console.error(error);
+    }
+  });
+
+  // 11. ABANDONAR PARTIDA / EXPULSAR JUGADOR
+  socket.on('abandonar_partida', async (data, callback) => {
+      try {
+          const { salaId, jugadorId } = data;
+          const salaCode = salaId.toUpperCase();
+          
+          const resJugador = await query('SELECT is_lider FROM jugadores WHERE id = $1 AND partida_id = $2', [jugadorId, salaCode]);
+          if (resJugador.rows.length === 0) return;
+          
+          const isLider = resJugador.rows[0].is_lider;
+          
+          if (isLider) {
+              // Si el capitán abandona, se destruye la partida
+              await query("DELETE FROM partidas WHERE id = $1", [salaCode]);
+              io.to(salaCode).emit('partida_destruida');
+          } else {
+              // Si es un jugador normal
+              const resPartida = await query('SELECT estado FROM partidas WHERE id = $1', [salaCode]);
+              if (resPartida.rows.length === 0) return;
+              
+              if (resPartida.rows[0].estado === 'ESPERANDO') {
+                  // Si están en lobby, se elimina de la BD
+                  await query('DELETE FROM jugadores WHERE id = $1', [jugadorId]);
+              } else {
+                  // Si ya empezó o finalizó, solo se congela
+                  await query('UPDATE jugadores SET activo = FALSE WHERE id = $1', [jugadorId]);
+              }
+              
+              const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
+              io.to(salaCode).emit('jugadores_actualizados', resJugadores.rows);
+          }
+          if (callback) callback({ success: true });
+      } catch (error) {
+          console.error(error);
+          if (callback) callback({ success: false, error: error.message });
+      }
+  });
+
+  socket.on('expulsar_jugador', async (data, callback) => {
+      try {
+          const { salaId, jugadorId } = data;
+          const salaCode = salaId.toUpperCase();
+          
+          // Solo se puede expulsar en ESPERANDO
+          await query('DELETE FROM jugadores WHERE id = $1', [jugadorId]);
+          
+          const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
+          io.to(salaCode).emit('jugadores_actualizados', resJugadores.rows);
+          io.to(salaCode).emit('jugador_expulsado', { jugadorId }); // Enviar el ID del jugador expulsado
+          
+          if (callback) callback({ success: true });
+      } catch (error) {
+          console.error(error);
+          if (callback) callback({ success: false, error: error.message });
+      }
+  });
+
+  // 12. VOLVER AL LOBBY
+  socket.on('volver_al_lobby', async (data, callback) => {
+      try {
+          const { salaId, jugadorId } = data;
+          const salaCode = salaId.toUpperCase();
+          
+          // Eliminar a los jugadores inactivos antes de volver al lobby
+          await query("DELETE FROM jugadores WHERE partida_id = $1 AND activo = FALSE", [salaCode]);
+          
+          await query('UPDATE jugadores SET en_lobby = TRUE WHERE id = $1', [jugadorId]);
+
+          // Si el jugador es líder, también pasamos la partida a estado ESPERANDO
+          const resJugador = await query('SELECT is_lider FROM jugadores WHERE id = $1', [jugadorId]);
+          if (resJugador.rows.length > 0 && resJugador.rows[0].is_lider) {
+              await query("UPDATE partidas SET estado = 'ESPERANDO' WHERE id = $1", [salaCode]);
+          }
+          
+          const resJugadores = await query('SELECT * FROM jugadores WHERE partida_id = $1 ORDER BY id ASC', [salaCode]);
+          io.to(salaCode).emit('jugadores_actualizados', resJugadores.rows);
+          
+          if (callback) callback({ success: true });
+      } catch (error) {
+          console.error(error);
+          if (callback) callback({ success: false, error: error.message });
+      }
   });
 
   socket.on('disconnect', () => {

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Confetti from 'react-confetti';
 import RulesModal from '../components/RulesModal';
 
-const LiderBoard = ({ socket }) => {
+const LiderBoard = ({ socket, onAbandonar }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,6 +26,42 @@ const LiderBoard = ({ socket }) => {
   const [modalGanadorAbierto, setModalGanadorAbierto] = useState(true);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
+  const handleAbandonar = () => {
+    if (salaId && jugador?.id) {
+        socket.emit('abandonar_partida', { salaId, jugadorId: jugador.id });
+    }
+    if (onAbandonar) onAbandonar();
+    sessionStorage.removeItem('salaId');
+    sessionStorage.removeItem('jugadorId');
+    sessionStorage.removeItem('isLider');
+    sessionStorage.removeItem('nombre');
+    navigate('/');
+  };
+
+    const handleVolverLobby = () => {
+        socket.emit('volver_al_lobby', { salaId, jugadorId: jugador.id }, () => {
+            // El servidor actualizará a los jugadores
+            setEstadoJuego('ESPERANDO');
+            setRondaActual(0);
+        });
+    };
+
+    const handleReiniciarMismaSala = () => {
+        socket.emit('reiniciar_partida', { salaId }, (res) => {
+            if (res && !res.success) {
+                alert(res.error);
+            }
+        });
+    };
+
+  const expulsarJugador = (jugadorId) => {
+    if(window.confirm("¿Seguro que quieres expulsar a este jugador?")) {
+        socket.emit('expulsar_jugador', { salaId, jugadorId }, () => {
+            // Se actualizará a través de socket.on('jugadores_actualizados')
+        });
+    }
+  };
+
   useEffect(() => {
     if (!salaId || !jugador) {
       navigate('/');
@@ -40,7 +76,15 @@ const LiderBoard = ({ socket }) => {
       setEstadoJuego('JUGANDO');
       setRondaActual(data.rondaActual);
       if (data.maxRondas) setMaxRondas(data.maxRondas);
-      inicializarCaptura(jugadoresEnSala);
+      if (data.jugadores) {
+        setJugadoresEnSala(data.jugadores);
+        inicializarCaptura(data.jugadores);
+      } else {
+        inicializarCaptura(jugadoresEnSala);
+      }
+      setYoYaAposte(false);
+      setMiApuestaHecha(0);
+      setModalGanadorAbierto(true); // Resetear modal ganador para próximas partidas
     });
 
     socket.on('estado_ronda_actualizado', (historialRonda) => {
@@ -84,6 +128,34 @@ const LiderBoard = ({ socket }) => {
       setHistorialCompleto(historial);
     });
 
+    socket.on('juego_reiniciado', (data) => {
+      setEstadoJuego('ESPERANDO');
+      setJugadoresEnSala(data.jugadores);
+      setRondaActual(0);
+      setCapturaResultados({});
+      setHistorialCompleto([]);
+      setModalGanadorAbierto(true); // reset modal state
+      setYoYaAposte(false);
+      setMiApuestaHecha(0);
+    });
+
+    socket.on('jugador_expulsado', (data) => {
+        if (data && data.jugadorId === jugador.id) {
+            alert("Has sido expulsado de la sala.");
+            sessionStorage.clear();
+            navigate('/');
+        } else if (data && data.jugadorId) {
+            // Filtrar localmente al jugador expulsado para que desaparezca de la lista
+            setJugadoresEnSala(prev => prev.filter(j => j.id !== data.jugadorId));
+        }
+    });
+
+    socket.on('partida_destruida', () => {
+        alert("El capitán ha abandonado la sala. La partida ha terminado.");
+        sessionStorage.clear();
+        navigate('/');
+    });
+
     return () => {
       socket.off('jugadores_actualizados');
       socket.off('juego_iniciado');
@@ -91,6 +163,9 @@ const LiderBoard = ({ socket }) => {
       socket.off('ronda_avanzada');
       socket.off('juego_finalizado');
       socket.off('historial_completo_actualizado');
+      socket.off('juego_reiniciado');
+      socket.off('jugador_expulsado');
+      socket.off('partida_destruida');
     };
   }, [socket, salaId, jugador, navigate, jugadoresEnSala]);
 
@@ -244,7 +319,8 @@ const LiderBoard = ({ socket }) => {
 
   const calificarRonda = () => {
     // Validar que todos hayan apostado
-    const todosApostaron = jugadoresEnSala.every(j => {
+    const jugadoresActivos = jugadoresEnSala.filter(j => j.activo);
+    const todosApostaron = jugadoresActivos.every(j => {
         const estado = estadoRonda.find(er => er.jugador_id === j.id);
         return estado && estado.estado_apuesta !== 'PENDIENTE';
     });
@@ -254,7 +330,7 @@ const LiderBoard = ({ socket }) => {
     }
 
     // Armar el payload de resultados
-    const resultados = jugadoresEnSala.map(j => {
+    const resultados = jugadoresActivos.map(j => {
         const cap = capturaResultados[j.id];
         const puntosCalculados = calcularPuntosRonda(
             cap.apuestaHecha, cap.apuestaGanada, cap.puntosExtra, cap.efectoPirata, rondaActual
@@ -312,17 +388,32 @@ const LiderBoard = ({ socket }) => {
   if (estadoJuego === 'ESPERANDO') {
     return (
       <div className="card table-card">
-        <h2>Sala de Espera - Eres el Capitán</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Sala de Espera - Eres el Capitán</h2>
+            <button className="btn-pirate" onClick={() => {
+                if(window.confirm("¿Seguro que quieres abandonar la sala?")) {
+                    sessionStorage.clear();
+                    handleAbandonar();
+                }
+            }}>Abandonar Sala</button>
+        </div>
         <p>Código para unirse: <strong style={{fontSize:'24px', color: 'var(--pirate-red)'}}>{salaId}</strong></p>
         
         <h3>Tripulación en Sala:</h3>
         <ul>
-          {jugadoresEnSala.map(j => <li key={j.id}>{j.nombre} {j.is_lider ? '(Tú)' : ''}</li>)}
+          {jugadoresEnSala.map(j => (
+            <li key={j.id} style={{ color: j.activo ? 'inherit' : 'grey', textDecoration: j.activo ? 'none' : 'line-through' }}>
+              {j.nombre} {j.is_lider ? '(Tú)' : ''} {!j.activo ? '(Inactivo)' : ''} {!j.en_lobby && j.activo ? '(En partida...)' : ''}
+              {!j.is_lider && j.en_lobby && j.activo && (
+                  <button className="btn-pirate red" style={{marginLeft: '10px', fontSize: '10px', padding: '2px 5px'}} onClick={() => expulsarJugador(j.id)}>Expulsar</button>
+              )}
+            </li>
+          ))}
         </ul>
 
-        {jugadoresEnSala.length > 0 && (
-          <button className="btn-pirate gold" onClick={iniciarJuego} style={{marginTop:'20px'}}>
-            ¡Levar Anclas! (Iniciar)
+        {jugadoresEnSala.filter(j => j.activo).length > 0 && (
+          <button className="btn-pirate gold" onClick={iniciarJuego} style={{marginTop:'20px'}} disabled={!jugadoresEnSala.filter(j => j.activo).every(j => j.en_lobby)}>
+            {jugadoresEnSala.filter(j => j.activo).every(j => j.en_lobby) ? '¡Levar Anclas! (Iniciar)' : 'Esperando a que todos vuelvan al lobby...'}
           </button>
         )}
       </div>
@@ -380,21 +471,45 @@ const LiderBoard = ({ socket }) => {
                     </tbody>
                 </table>
             </div>
-            <button className="btn-pirate" onClick={() => navigate('/')}>Volver a la Taberna</button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
+              <button className="btn-pirate gold" onClick={handleReiniciarMismaSala}>Empezar Nueva Partida</button>
+              <button className="btn-pirate" onClick={handleVolverLobby}>Volver al Lobby</button>
+            </div>
         </div>
     )
   }
 
-  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.every(j => {
+  const todosApostaron = estadoJuego === 'JUGANDO' && jugadoresEnSala.filter(j => j.activo).every(j => {
       const estado = estadoRonda.find(er => er.jugador_id === j.id);
       return estado && estado.estado_apuesta !== 'PENDIENTE';
   });
 
   return (
     <div className="card table-card" style={{ width: '100%' }}>
-      <div className="table-header">
-        <h2>Panel del Capitán - Ronda {rondaActual}</h2>
-        <div>
+      <div className="table-header" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <h2>Panel del Capitán - Ronda {rondaActual} de {maxRondas}</h2>
+            <div>
+              <button className="btn-pirate" style={{ fontSize: '12px', padding: '5px 10px', marginRight: '10px' }} onClick={() => {
+                  if(window.confirm("¿Seguro que quieres salir de la partida?")) {
+                      sessionStorage.clear();
+                      handleAbandonar();
+                  }
+              }}>Salir</button>
+              <button 
+                  className="btn-pirate" 
+                  style={{ backgroundColor: '#c0392b', fontSize: '12px', padding: '5px 10px' }} 
+                  onClick={() => {
+                      if(window.confirm("¿Estás seguro de que quieres finalizar la partida anticipadamente? Esto calculará los ganadores con los puntos actuales.")) {
+                          socket.emit('finalizar_partida_anticipadamente', { salaId });
+                      }
+                  }}
+              >
+                  Finalizar Partida Ya
+              </button>
+            </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <button className="btn-pirate blue" onClick={() => setIsRulesModalOpen(true)} style={{marginRight: '10px'}}>📜 Reglas y Poderes</button>
           <button className="btn-pirate" onClick={cargarHistorialCompleto} style={{marginRight: '10px'}}>Historial</button>
           <button className="btn-pirate gold" onClick={calificarRonda}>Calificar y Avanzar</button>
@@ -434,6 +549,8 @@ const LiderBoard = ({ socket }) => {
           </thead>
           <tbody>
             {jugadoresEnSala.map(j => {
+                if (!j.activo) return null;
+
                 const statusRonda = estadoRonda.find(er => er.jugador_id === j.id);
                 const cap = capturaResultados[j.id] || { apuestaHecha:0, apuestaGanada:0, puntosExtra:0, efectoPirata:0 };
                 
