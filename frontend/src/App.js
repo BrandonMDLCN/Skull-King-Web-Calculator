@@ -6,7 +6,7 @@ import io from 'socket.io-client';
 import Home from './views/Home';
 import LiderBoard from './views/LiderBoard';
 import JugadorBoard from './views/JugadorBoard';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
 const socket = io(backendUrl); // URL de nuestro Backend
@@ -14,21 +14,11 @@ const socket = io(backendUrl); // URL de nuestro Backend
 function App() {
   const [jugador, setJugador] = useState(null);
   const [salaId, setSalaId] = useState('');
-  const [jugadores, setJugadores] = useState([]);
-  const [estadoPartida, setEstadoPartida] = useState('HOME');
-  const [rondaActual, setRondaActual] = useState(0);
-  const [maxRondas, setMaxRondas] = useState(5);
-  const [estadoRonda, setEstadoRonda] = useState([]);
 
   // Función para salir o reiniciar local
   const handleSalirPartida = () => {
     setJugador(null);
     setSalaId('');
-    setJugadores([]);
-    setEstadoPartida('HOME');
-    setRondaActual(0);
-    setMaxRondas(5);
-    setEstadoRonda([]);
     localStorage.removeItem('skullking_jugador');
     localStorage.removeItem('skullking_salaId');
   };
